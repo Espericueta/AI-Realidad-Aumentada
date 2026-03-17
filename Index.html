@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Tarea 3.2 — AR Realidad Aumentada</title>
+
+  <!-- A-Frame + AR.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* ── Loading Screen ── */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #0a0a1a 0%, #0d1b2a 50%, #0a0a1a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.8s ease;
+    }
+    #loading-screen.hidden { opacity: 0; pointer-events: none; }
+
+    .loading-logo {
+      width: 90px;
+      height: 90px;
+      margin-bottom: 24px;
+      animation: spin 3s linear infinite;
+    }
+    @keyframes spin {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .loading-sub {
+      font-size: 13px;
+      color: #6ec6ff;
+      margin-bottom: 32px;
+      letter-spacing: 1px;
+    }
+    .loading-bar-bg {
+      width: 200px;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .loading-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #6ec6ff, #a78bfa);
+      border-radius: 2px;
+      animation: loadbar 2.5s ease forwards;
+    }
+    @keyframes loadbar { 0%{width:0%} 100%{width:100%} }
+
+    .loading-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      text-align: center;
+      max-width: 260px;
+      line-height: 1.6;
+    }
+
+    /* ── HUD Overlay ── */
+    #hud {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    /* Top bar */
+    .hud-top {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 16px 20px 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .hud-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .hud-badge {
+      background: rgba(110,198,255,0.2);
+      border: 1px solid rgba(110,198,255,0.4);
+      color: #6ec6ff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    /* Center crosshair */
+    .hud-crosshair {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px; height: 60px;
+    }
+    .crosshair-ring {
+      width: 60px; height: 60px;
+      border: 1.5px solid rgba(110,198,255,0.6);
+      border-radius: 50%;
+      animation: pulse-ring 2s ease-in-out infinite;
+    }
+    .crosshair-dot {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 6px; height: 6px;
+      background: #6ec6ff;
+      border-radius: 50%;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { transform: scale(1); opacity: 0.6; }
+      50% { transform: scale(1.15); opacity: 1; }
+    }
+
+    /* Corner brackets */
+    .hud-corners {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 160px; height: 160px;
+    }
+    .corner {
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: rgba(110,198,255,0.5);
+      border-style: solid;
+    }
+    .corner-tl { top:0; left:0; border-width: 2px 0 0 2px; }
+    .corner-tr { top:0; right:0; border-width: 2px 2px 0 0; }
+    .corner-bl { bottom:0; left:0; border-width: 0 0 2px 2px; }
+    .corner-br { bottom:0; right:0; border-width: 0 2px 2px 0; }
+
+    /* Instruction card */
+    #instruction-card {
+      position: absolute;
+      bottom: 100px; left: 20px; right: 20px;
+      background: rgba(5, 15, 30, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(110,198,255,0.25);
+      border-radius: 16px;
+      padding: 16px 20px;
+      pointer-events: auto;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #instruction-card.fade-out {
+      opacity: 0;
+      transform: translateY(20px);
+      pointer-events: none;
+    }
+    .instruction-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .instruction-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .instruction-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.5;
+    }
+    .instruction-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #6ec6ff;
+      flex-shrink: 0;
+    }
+    .step-dot.done { background: #34d399; }
+    .step-dot.pending { background: rgba(255,255,255,0.2); }
+
+    /* Bottom controls */
+    .hud-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 12px 20px 28px;
+      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: auto;
+    }
+    .btn-ar {
+      background: rgba(110,198,255,0.15);
+      border: 1px solid rgba(110,198,255,0.4);
+      color: #6ec6ff;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 9px 18px;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-ar:active { transform: scale(0.95); background: rgba(110,198,255,0.3); }
+    .btn-primary {
+      background: linear-gradient(135deg, #6ec6ff, #a78bfa);
+      border: none;
+      color: #000;
+      font-weight: 700;
+    }
+    .btn-primary:active { transform: scale(0.95); }
+
+    /* Status dot */
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      margin-right: 6px;
+      animation: blink 1s ease infinite;
+    }
+    .status-dot.ready { background: #34d399; animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .status-text {
+      font-size: 11px;
+      color: rgba(255,255,255,0.6);
+      display: flex;
+      align-items: center;
+    }
+
+    /* Object info popup */
+    #obj-info {
+      position: absolute;
+      top: 80px; right: 16px;
+      background: rgba(5,15,30,0.85);
+      border: 1px solid rgba(167,139,250,0.3);
+      border-radius: 12px;
+      padding: 12px 14px;
+      min-width: 140px;
+      opacity: 0;
+      transform: translateX(20px);
+      transition: all 0.4s ease;
+    }
+    #obj-info.visible { opacity: 1; transform: translateX(0); }
+    .info-label { font-size: 10px; color: #a78bfa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+    .info-value { font-size: 13px; color: #fff; font-weight: 600; margin-bottom: 8px; }
+    .info-row { display: flex; justify-content: space-between; font-size: 11px; color: rgba(255,255,255,0.45); margin-bottom: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <svg class="loading-logo" viewBox="0 0 90 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="45" cy="45" r="38" stroke="rgba(110,198,255,0.2)" stroke-width="2"/>
+    <circle cx="45" cy="45" r="28" stroke="rgba(167,139,250,0.3)" stroke-width="1.5"/>
+    <path d="M45 10 L55 30 L45 25 L35 30 Z" fill="#6ec6ff" opacity="0.9"/>
+    <path d="M45 80 L55 60 L45 65 L35 60 Z" fill="#a78bfa" opacity="0.9"/>
+    <path d="M10 45 L30 35 L25 45 L30 55 Z" fill="#6ec6ff" opacity="0.7"/>
+    <path d="M80 45 L60 35 L65 45 L60 55 Z" fill="#a78bfa" opacity="0.7"/>
+    <circle cx="45" cy="45" r="6" fill="#6ec6ff"/>
+  </svg>
+  <div class="loading-title">Tarea 3.2 AR</div>
+  <div class="loading-sub">Realidad Aumentada · WebXR</div>
+  <div class="loading-bar-bg"><div class="loading-bar"></div></div>
+  <div class="loading-hint">Permitir acceso a la cámara cuando el navegador lo solicite</div>
+</div>
+
+<!-- HUD Overlay -->
+<div id="hud">
+  <!-- Top -->
+  <div class="hud-top">
+    <span class="hud-title">AR · 3D Flotante</span>
+    <span class="hud-badge">WebXR</span>
+  </div>
+
+  <!-- Crosshair + corners -->
+  <div class="hud-crosshair">
+    <div class="crosshair-ring"></div>
+    <div class="crosshair-dot"></div>
+  </div>
+  <div class="hud-corners">
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+  </div>
+
+  <!-- Object info panel -->
+  <div id="obj-info">
+    <div class="info-label">Objeto AR</div>
+    <div class="info-value">Geometría 3D</div>
+    <div class="info-row"><span>Rotación</span><span id="rot-val">0°</span></div>
+    <div class="info-row"><span>Flotación</span><span>Activa</span></div>
+    <div class="info-row"><span>Framework</span><span>A-Frame</span></div>
+  </div>
+
+  <!-- Instruction card -->
+  <div id="instruction-card">
+    <span class="instruction-icon">📱</span>
+    <div class="instruction-title">Cómo usar la experiencia AR</div>
+    <div class="instruction-text">Apunta la cámara hacia un marcador Hiro o una superficie plana.</div>
+    <div class="instruction-step">
+      <div class="step-dot done" id="s1"></div>
+      <span style="font-size:12px;color:rgba(255,255,255,0.7)">Permitir acceso a la cámara</span>
+    </div>
+    <div class="instruction-step">
+      <div class="step-dot" id="s2"></div>
+      <span style="font-size:12px;color:rgba(255,255,255,0.7)">Apuntar al marcador Hiro</span>
+    </div>
+    <div class="instruction-step">
+      <div class="step-dot pending" id="s3"></div>
+      <span style="font-size:12px;color:rgba(255,255,255,0.5)">¡El objeto 3D aparece y flota!</span>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="hud-bottom">
+    <div class="status-text">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-label">Buscando marcador...</span>
+    </div>
+    <button class="btn-ar" onclick="toggleInfo()">Info</button>
+    <button class="btn-ar btn-primary" onclick="resetScene()">Reset</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     A-FRAME AR SCENE
+     Usa marcador tipo "hiro" (el más fácil de probar).
+     Imprime o muestra en pantalla: https://bit.ly/hiro-marker
+     ══════════════════════════════════════════ -->
+<a-scene
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+  renderer="logarithmicDepthBuffer: true; antialias: true;"
+  vr-mode-ui="enabled: false"
+  style="position:fixed;inset:0;z-index:0;">
+
+  <!-- ── Assets ── -->
+  <a-assets>
+    <!-- Material colors predefined -->
+  </a-assets>
+
+  <!-- ════════════════════════════
+       MARCADOR HIRO
+       El objeto aparece sobre este marcador.
+       ════════════════════════════ -->
+  <a-marker preset="hiro" id="main-marker" smooth="true" smoothCount="5" smoothTolerance="0.01">
+
+    <!-- Objeto principal: icosaedro flotante -->
+    <a-icosahedron
+      id="main-object"
+      position="0 0.6 0"
+      radius="0.35"
+      color="#6ec6ff"
+      metalness="0.4"
+      roughness="0.3"
+      wireframe="false"
+      animation="property: rotation; to: 0 360 0; dur: 4000; easing: linear; loop: true;"
+      animation__float="property: position; dir: alternate; dur: 1800; easing: easeInOutSine; loop: true; to: 0 0.85 0; from: 0 0.55 0;">
+    </a-icosahedron>
+
+    <!-- Anillo decorativo externo (orbita) -->
+    <a-torus
+      position="0 0.7 0"
+      radius="0.55"
+      radius-tubular="0.015"
+      color="#a78bfa"
+      opacity="0.7"
+      animation="property: rotation; to: 90 360 0; dur: 6000; easing: linear; loop: true;">
+    </a-torus>
+
+    <!-- Segundo anillo inclinado -->
+    <a-torus
+      position="0 0.7 0"
+      radius="0.45"
+      radius-tubular="0.01"
+      color="#34d399"
+      opacity="0.5"
+      rotation="60 0 0"
+      animation="property: rotation; to: 120 360 60; dur: 4500; easing: linear; loop: true;">
+    </a-torus>
+
+    <!-- Esferas orbitando -->
+    <a-sphere
+      position="0.55 0.7 0"
+      radius="0.06"
+      color="#f59e0b"
+      animation="property: position; to: -0.55 0.7 0; dir: alternate; dur: 2000; easing: easeInOutSine; loop: true;">
+    </a-sphere>
+
+    <a-sphere
+      position="0 0.7 0.55"
+      radius="0.04"
+      color="#f87171"
+      animation="property: position; to: 0 0.7 -0.55; dir: alternate; dur: 2800; easing: easeInOutSine; loop: true;">
+    </a-sphere>
+
+    <!-- Sombra / base circular -->
+    <a-circle
+      position="0 0.01 0"
+      rotation="-90 0 0"
+      radius="0.7"
+      color="#6ec6ff"
+      opacity="0.08">
+    </a-circle>
+
+    <!-- Cuadrícula de referencia -->
+    <a-grid
+      position="0 0 0"
+      rotation="-90 0 0"
+      width="2" height="2"
+      color="#6ec6ff"
+      opacity="0.15">
+    </a-grid>
+
+    <!-- Texto flotante -->
+    <a-text
+      value="TAREA 3.2\nRealidad Aumentada"
+      align="center"
+      position="0 1.35 0"
+      color="#ffffff"
+      width="2"
+      font="mozillavr"
+      animation__float2="property: position; dir: alternate; dur: 2000; easing: easeInOutSine; loop: true; to: 0 1.5 0; from: 0 1.35 0;">
+    </a-text>
+
+  </a-marker>
+
+  <!-- ════════════════════
+       MODO ALTERNATIVO: Sin marcador físico
+       Usa geolocation=false y surface detection
+       ════════════════════ -->
+
+  <!-- Cámara AR -->
+  <a-entity camera></a-entity>
+
+</a-scene>
+
+<script>
+  // ── Loading screen ──
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.getElementById('loading-screen').classList.add('hidden');
+    }, 2800);
+  });
+
+  // ── Track marker visibility ──
+  const marker = document.getElementById('main-marker');
+  const statusDot = document.getElementById('status-dot');
+  const statusLabel = document.getElementById('status-label');
+  const objInfo = document.getElementById('obj-info');
+  const instrCard = document.getElementById('instruction-card');
+  const s2 = document.getElementById('s2');
+  const s3 = document.getElementById('s3');
+  let rotDeg = 0;
+  let markerVisible = false;
+
+  marker.addEventListener('markerFound', () => {
+    markerVisible = true;
+    statusDot.classList.add('ready');
+    statusLabel.textContent = 'Marcador detectado ✓';
+    s2.classList.add('done');
+    s3.classList.add('done');
+    instrCard.classList.add('fade-out');
+    objInfo.classList.add('visible');
+  });
+
+  marker.addEventListener('markerLost', () => {
+    markerVisible = false;
+    statusDot.classList.remove('ready');
+    statusLabel.textContent = 'Buscando marcador...';
+    objInfo.classList.remove('visible');
+    instrCard.classList.remove('fade-out');
+  });
+
+  // ── Update rotation display ──
+  setInterval(() => {
+    if (markerVisible) {
+      rotDeg = (rotDeg + 3) % 360;
+      const el = document.getElementById('rot-val');
+      if (el) el.textContent = rotDeg + '°';
+    }
+  }, 80);
+
+  // ── UI controls ──
+  function toggleInfo() {
+    objInfo.classList.toggle('visible');
+  }
+
+  function resetScene() {
+    const obj = document.getElementById('main-object');
+    if (obj) {
+      obj.setAttribute('position', '0 0.6 0');
+      obj.setAttribute('scale', '0 0 0');
+      setTimeout(() => {
+        obj.setAttribute('scale', '1 1 1');
+      }, 100);
+    }
+  }
+
+  // ── Marker step 1 done after camera permission ──
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(() => {
+      document.getElementById('s1').classList.add('done');
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>
