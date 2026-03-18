@@ -3,196 +3,237 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-<title>Tarea 3.2 — AR Realidad Aumentada</title>
+<title>Tarea 3.2 — AR con Giroscopio</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#000; font-family:'Segoe UI',sans-serif; overflow:hidden; height:100dvh; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; font-family:'Segoe UI',sans-serif; overflow:hidden; height:100dvh; }
 
-  /* Camera feed fills screen */
-  #cam {
-    position:fixed; inset:0;
-    width:100%; height:100%;
-    object-fit:cover;
-    z-index:0;
-  }
+#cam {
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  object-fit:cover; z-index:0;
+}
+#three-canvas {
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  z-index:1; pointer-events:none;
+}
+#hud { position:fixed; inset:0; z-index:10; pointer-events:none; }
 
-  /* Three.js canvas on top, transparent bg */
-  #three-canvas {
-    position:fixed; inset:0;
-    width:100%; height:100%;
-    z-index:1;
-    pointer-events:none;
-  }
+/* ── Permission / Start screen ── */
+#start-screen {
+  position:fixed; inset:0; z-index:999;
+  background:linear-gradient(160deg,#07091a 0%,#0e1a2e 60%,#07091a 100%);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  padding:36px; text-align:center;
+  transition:opacity .7s ease;
+}
+#start-screen.hidden { opacity:0; pointer-events:none; }
 
-  /* HUD */
-  #hud {
-    position:fixed; inset:0;
-    z-index:10;
-    pointer-events:none;
-  }
+.start-orb {
+  width:110px; height:110px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #6ec6ff, #3b6fd4 50%, #1a2a6c);
+  box-shadow:0 0 60px rgba(110,198,255,.4), 0 0 120px rgba(110,198,255,.15);
+  margin-bottom:28px;
+  animation:orbpulse 3s ease-in-out infinite;
+}
+@keyframes orbpulse {
+  0%,100%{ transform:scale(1); box-shadow:0 0 60px rgba(110,198,255,.4); }
+  50%{ transform:scale(1.06); box-shadow:0 0 90px rgba(110,198,255,.6); }
+}
+.start-title { color:#fff; font-size:26px; font-weight:800; letter-spacing:1px; margin-bottom:8px; }
+.start-sub { color:#6ec6ff; font-size:13px; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px; }
+.start-desc { color:rgba(255,255,255,.5); font-size:14px; line-height:1.8; margin-bottom:36px; max-width:280px; }
+.start-btn {
+  background:linear-gradient(135deg,#6ec6ff,#a78bfa);
+  border:none; color:#000; font-size:16px; font-weight:800;
+  padding:16px 44px; border-radius:40px; cursor:pointer;
+  box-shadow:0 0 40px rgba(110,198,255,.35);
+  transition:transform .15s;
+}
+.start-btn:active { transform:scale(.95); }
+.start-note { color:rgba(255,255,255,.25); font-size:11px; margin-top:18px; line-height:1.6; }
 
-  .top-bar {
-    position:absolute; top:0; left:0; right:0;
-    padding:14px 18px 10px;
-    background:linear-gradient(to bottom,rgba(0,0,0,.65) 0%,transparent 100%);
-    display:flex; align-items:center; justify-content:space-between;
-  }
-  .top-title { color:#fff; font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
-  .badge {
-    background:rgba(110,198,255,.18);
-    border:1px solid rgba(110,198,255,.4);
-    color:#6ec6ff; font-size:10px; font-weight:700;
-    letter-spacing:1px; padding:3px 10px; border-radius:20px;
-  }
+/* ── HUD top ── */
+.top-bar {
+  position:absolute; top:0; left:0; right:0;
+  padding:14px 18px 10px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.6),transparent);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.top-title { color:#fff; font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
+.badge {
+  background:rgba(110,198,255,.18); border:1px solid rgba(110,198,255,.4);
+  color:#6ec6ff; font-size:10px; font-weight:700;
+  letter-spacing:1px; padding:3px 10px; border-radius:20px;
+}
 
-  /* Crosshair */
-  .crosshair {
-    position:absolute; top:50%; left:50%;
-    transform:translate(-50%,-50%);
-    width:64px; height:64px;
-  }
-  .ch-ring {
-    width:64px; height:64px;
-    border:1.5px solid rgba(110,198,255,.7);
-    border-radius:50%;
-    animation:pulse 2s ease-in-out infinite;
-  }
-  .ch-dot {
-    position:absolute; top:50%; left:50%;
-    transform:translate(-50%,-50%);
-    width:7px; height:7px;
-    background:#6ec6ff; border-radius:50%;
-  }
-  @keyframes pulse { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.18);opacity:1} }
+/* ── Gyro indicator ── */
+#gyro-indicator {
+  position:absolute; top:68px; left:50%;
+  transform:translateX(-50%);
+  display:flex; align-items:center; gap:8px;
+  background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.1);
+  border-radius:20px; padding:6px 14px;
+  opacity:0; transition:opacity .4s;
+}
+#gyro-indicator.show { opacity:1; }
+.gyro-dot { width:8px; height:8px; border-radius:50%; background:#34d399; }
+.gyro-text { color:rgba(255,255,255,.7); font-size:11px; }
 
-  /* Corner brackets */
-  .corners {
-    position:absolute; top:50%; left:50%;
-    transform:translate(-50%,-50%);
-    width:170px; height:170px;
-  }
-  .c { position:absolute; width:22px; height:22px; border-color:rgba(110,198,255,.5); border-style:solid; }
-  .c.tl { top:0;left:0; border-width:2px 0 0 2px; }
-  .c.tr { top:0;right:0; border-width:2px 2px 0 0; }
-  .c.bl { bottom:0;left:0; border-width:0 0 2px 2px; }
-  .c.br { bottom:0;right:0; border-width:0 2px 2px 0; }
+/* ── Crosshair ── */
+.crosshair {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:56px; height:56px; pointer-events:none;
+}
+.ch-ring {
+  width:56px; height:56px;
+  border:1.5px solid rgba(110,198,255,.5);
+  border-radius:50%;
+  animation:chpulse 2.5s ease-in-out infinite;
+}
+.ch-dot {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:5px; height:5px; background:#6ec6ff; border-radius:50%;
+}
+@keyframes chpulse { 0%,100%{opacity:.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.15)} }
 
-  /* Status pill */
-  #status-pill {
-    position:absolute; bottom:110px; left:50%;
-    transform:translateX(-50%);
-    background:rgba(0,0,0,.7);
-    border:1px solid rgba(255,255,255,.15);
-    border-radius:24px; padding:8px 18px;
-    color:#fff; font-size:12px;
-    display:flex; align-items:center; gap:8px;
-    white-space:nowrap;
-  }
-  .sdot {
-    width:8px; height:8px; border-radius:50%;
-    background:#f59e0b;
-    animation:blink 1s ease infinite;
-  }
-  .sdot.on { background:#34d399; animation:none; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+/* Corner brackets */
+.corners {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:150px; height:150px;
+}
+.corner {
+  position:absolute; width:20px; height:20px;
+  border-color:rgba(110,198,255,.45); border-style:solid;
+}
+.corner.tl{top:0;left:0;border-width:2px 0 0 2px}
+.corner.tr{top:0;right:0;border-width:2px 2px 0 0}
+.corner.bl{bottom:0;left:0;border-width:0 0 2px 2px}
+.corner.br{bottom:0;right:0;border-width:0 2px 2px 0}
 
-  /* Bottom buttons */
-  .bottom-bar {
-    position:absolute; bottom:0; left:0; right:0;
-    padding:12px 20px 30px;
-    background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 100%);
-    display:flex; align-items:center; justify-content:space-around;
-    pointer-events:auto;
-  }
-  .btn {
-    background:rgba(255,255,255,.12);
-    border:1px solid rgba(255,255,255,.25);
-    color:#fff; font-size:13px; font-weight:600;
-    padding:10px 22px; border-radius:24px; cursor:pointer;
-    transition:background .2s, transform .1s;
-  }
-  .btn:active { transform:scale(.94); background:rgba(255,255,255,.25); }
-  .btn.primary {
-    background:linear-gradient(135deg,#6ec6ff,#a78bfa);
-    border:none; color:#000;
-  }
+/* ── Compass / rotation display ── */
+#compass {
+  position:absolute; top:50%; right:14px;
+  transform:translateY(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  opacity:0; transition:opacity .4s;
+}
+#compass.show { opacity:1; }
+.compass-ring {
+  width:52px; height:52px;
+  border:1.5px solid rgba(255,255,255,.2);
+  border-radius:50%; position:relative;
+  background:rgba(0,0,0,.4);
+}
+#compass-needle {
+  position:absolute; top:50%; left:50%;
+  width:2px; height:20px;
+  background:linear-gradient(to bottom,#6ec6ff,transparent);
+  transform-origin:bottom center;
+  transform:translate(-50%,-100%);
+  transition:transform .1s ease;
+}
+.compass-label { color:rgba(255,255,255,.4); font-size:10px; }
 
-  /* Permission screen */
-  #perm-screen {
-    position:fixed; inset:0; z-index:999;
-    background:linear-gradient(135deg,#0a0a1a,#0d1b2a);
-    display:flex; flex-direction:column;
-    align-items:center; justify-content:center;
-    padding:32px; text-align:center;
-    transition:opacity .6s ease;
-  }
-  #perm-screen.hidden { opacity:0; pointer-events:none; }
-  .perm-icon { font-size:64px; margin-bottom:20px; }
-  .perm-title { color:#fff; font-size:22px; font-weight:700; margin-bottom:10px; }
-  .perm-text { color:rgba(255,255,255,.55); font-size:14px; line-height:1.7; margin-bottom:32px; }
-  .perm-btn {
-    background:linear-gradient(135deg,#6ec6ff,#a78bfa);
-    border:none; color:#000; font-size:16px; font-weight:700;
-    padding:14px 36px; border-radius:32px; cursor:pointer;
-    box-shadow:0 0 30px rgba(110,198,255,.3);
-  }
-  .perm-note { color:rgba(255,255,255,.3); font-size:11px; margin-top:16px; }
+/* ── Info panel ── */
+#info-panel {
+  position:absolute; top:68px; left:14px;
+  background:rgba(5,12,28,.82); border:1px solid rgba(167,139,250,.25);
+  border-radius:14px; padding:14px 16px; min-width:140px;
+  opacity:0; transform:translateX(-16px);
+  transition:all .4s ease; pointer-events:none;
+}
+#info-panel.show { opacity:1; transform:translateX(0); pointer-events:auto; }
+.il { font-size:10px; color:#a78bfa; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
+.iv { font-size:13px; color:#fff; font-weight:700; margin-bottom:10px; }
+.ir { display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,.4); margin-bottom:3px; }
 
-  /* Object info panel */
-  #obj-panel {
-    position:absolute; top:70px; right:14px;
-    background:rgba(5,12,28,.85);
-    border:1px solid rgba(167,139,250,.3);
-    border-radius:14px; padding:14px 16px;
-    min-width:148px;
-    opacity:0; transform:translateX(16px);
-    transition:all .4s ease;
-    pointer-events:none;
-  }
-  #obj-panel.show { opacity:1; transform:translateX(0); }
-  .panel-label { font-size:10px; color:#a78bfa; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
-  .panel-val { font-size:14px; color:#fff; font-weight:700; margin-bottom:10px; }
-  .panel-row { display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,.4); margin-bottom:3px; }
+/* ── Hint toast ── */
+#hint {
+  position:absolute; bottom:110px; left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,0,0,.72); border:1px solid rgba(255,255,255,.12);
+  border-radius:24px; padding:9px 20px;
+  color:rgba(255,255,255,.75); font-size:12px;
+  white-space:nowrap; pointer-events:none;
+  animation:hintfade 4s ease forwards;
+}
+@keyframes hintfade { 0%{opacity:0;transform:translateX(-50%) translateY(8px)} 15%{opacity:1;transform:translateX(-50%) translateY(0)} 75%{opacity:1} 100%{opacity:0} }
 
-  /* Color picker */
-  #color-bar {
-    position:absolute; bottom:90px; left:50%;
-    transform:translateX(-50%);
-    display:flex; gap:10px; pointer-events:auto;
-  }
-  .color-dot {
-    width:28px; height:28px; border-radius:50%;
-    cursor:pointer; border:2px solid transparent;
-    transition:transform .2s, border-color .2s;
-  }
-  .color-dot:active { transform:scale(1.2); }
-  .color-dot.active { border-color:#fff; }
+/* ── Color bar ── */
+#color-bar {
+  position:absolute; bottom:86px; left:50%;
+  transform:translateX(-50%);
+  display:flex; gap:10px; pointer-events:auto;
+  opacity:0; transition:opacity .4s;
+}
+#color-bar.show { opacity:1; }
+.cdot {
+  width:30px; height:30px; border-radius:50%; cursor:pointer;
+  border:2.5px solid transparent; transition:transform .2s,border-color .2s;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.cdot:active { transform:scale(1.25); }
+.cdot.active { border-color:#fff; }
+
+/* ── Bottom bar ── */
+.bottom-bar {
+  position:absolute; bottom:0; left:0; right:0;
+  padding:10px 20px 28px;
+  background:linear-gradient(to top,rgba(0,0,0,.6),transparent);
+  display:flex; align-items:center; justify-content:space-around;
+  pointer-events:auto; opacity:0; transition:opacity .4s;
+}
+.bottom-bar.show { opacity:1; }
+.btn {
+  background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.22);
+  color:#fff; font-size:13px; font-weight:600;
+  padding:10px 20px; border-radius:24px; cursor:pointer;
+  transition:background .2s,transform .1s;
+}
+.btn:active { transform:scale(.93); background:rgba(255,255,255,.22); }
+.btn.primary { background:linear-gradient(135deg,#6ec6ff,#a78bfa); border:none; color:#000; font-weight:800; }
 </style>
 </head>
 <body>
 
-<!-- Permission screen -->
-<div id="perm-screen">
-  <div class="perm-icon">📷</div>
-  <div class="perm-title">Activar Cámara AR</div>
-  <div class="perm-text">
-    Esta experiencia de Realidad Aumentada necesita acceso a tu cámara para superponer objetos 3D en el mundo real.
+<!-- Start screen -->
+<div id="start-screen">
+  <div class="start-orb"></div>
+  <div class="start-title">Realidad Aumentada</div>
+  <div class="start-sub">Tarea 3.2 · Giroscopio</div>
+  <div class="start-desc">
+    El objeto 3D quedará <strong style="color:#6ec6ff">anclado en el espacio real</strong>.<br>
+    Mueve el celular para verlo desde distintos ángulos, como si existiera en tu cuarto.
   </div>
-  <button class="perm-btn" onclick="startCamera()">Activar Cámara</button>
-  <div class="perm-note">Solo se usa localmente, no se graba ni se envía nada.</div>
+  <button class="start-btn" onclick="init()">🚀 Iniciar Experiencia AR</button>
+  <div class="start-note">
+    Se solicitará acceso a la cámara y al giroscopio.<br>
+    Abre en Chrome para mejor compatibilidad.
+  </div>
 </div>
 
-<!-- Camera video element -->
+<!-- Camera -->
 <video id="cam" autoplay playsinline muted></video>
-
 <!-- Three.js canvas -->
 <canvas id="three-canvas"></canvas>
 
 <!-- HUD -->
 <div id="hud">
   <div class="top-bar">
-    <span class="top-title">AR · 3D Flotante</span>
-    <span class="badge">Tarea 3.2</span>
+    <span class="top-title">AR · Giroscopio</span>
+    <span class="badge" id="badge">Iniciando...</span>
+  </div>
+
+  <div id="gyro-indicator">
+    <div class="gyro-dot"></div>
+    <span class="gyro-text">Giroscopio activo</span>
   </div>
 
   <div class="crosshair">
@@ -200,267 +241,310 @@
     <div class="ch-dot"></div>
   </div>
   <div class="corners">
-    <div class="c tl"></div><div class="c tr"></div>
-    <div class="c bl"></div><div class="c br"></div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
   </div>
 
-  <div id="obj-panel">
-    <div class="panel-label">Objeto AR</div>
-    <div class="panel-val">Icosaedro 3D</div>
-    <div class="panel-row"><span>Framework</span><span>Three.js</span></div>
-    <div class="panel-row"><span>Animación</span><span>Activa ✓</span></div>
-    <div class="panel-row"><span>FPS</span><span id="fps-val">--</span></div>
+  <div id="compass">
+    <div class="compass-ring">
+      <div id="compass-needle"></div>
+    </div>
+    <span class="compass-label">Rotación</span>
   </div>
 
-  <div id="status-pill">
-    <div class="sdot" id="sdot"></div>
-    <span id="slabel">Iniciando cámara...</span>
+  <div id="info-panel">
+    <div class="il">Objeto AR</div>
+    <div class="iv">Icosaedro 3D</div>
+    <div class="ir"><span>Giroscopio</span><span id="gyro-status">--</span></div>
+    <div class="ir"><span>α (Z)</span><span id="val-a">0°</span></div>
+    <div class="ir"><span>β (X)</span><span id="val-b">0°</span></div>
+    <div class="ir"><span>γ (Y)</span><span id="val-g">0°</span></div>
+    <div class="ir"><span>FPS</span><span id="fps-val">--</span></div>
   </div>
 
-  <!-- Color selector -->
   <div id="color-bar">
-    <div class="color-dot active" style="background:#6ec6ff" onclick="setColor('#6ec6ff',this)"></div>
-    <div class="color-dot" style="background:#a78bfa" onclick="setColor('#a78bfa',this)"></div>
-    <div class="color-dot" style="background:#34d399" onclick="setColor('#34d399',this)"></div>
-    <div class="color-dot" style="background:#f59e0b" onclick="setColor('#f59e0b',this)"></div>
-    <div class="color-dot" style="background:#f87171" onclick="setColor('#f87171',this)"></div>
+    <div class="cdot active" style="background:#6ec6ff" onclick="setColor('#6ec6ff',this)"></div>
+    <div class="cdot" style="background:#a78bfa" onclick="setColor('#a78bfa',this)"></div>
+    <div class="cdot" style="background:#34d399" onclick="setColor('#34d399',this)"></div>
+    <div class="cdot" style="background:#f59e0b" onclick="setColor('#f59e0b',this)"></div>
+    <div class="cdot" style="background:#f87171" onclick="setColor('#f87171',this)"></div>
   </div>
 
-  <div class="bottom-bar">
-    <button class="btn" onclick="togglePanel()">Info</button>
-    <button class="btn" onclick="toggleAnimation()">⏸ Pausa</button>
-    <button class="btn primary" onclick="resetObject()">Reset</button>
+  <div class="bottom-bar" id="bottom-bar">
+    <button class="btn" onclick="toggleInfo()">Info</button>
+    <button class="btn" onclick="togglePause()">⏸</button>
+    <button class="btn primary" onclick="recenter()">Recentrar</button>
   </div>
 </div>
 
-<!-- Three.js from CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
 <script>
-// ─────────────────────────────────────────
-//  CAMERA
-// ─────────────────────────────────────────
-async function startCamera() {
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let renderer, scene, cam3d;
+let mainMesh, ring1, ring2, orb1, orb2, particleSystem;
+let paused = false;
+let fpsCount = 0, fpsLast = Date.now();
+
+// Gyroscope state
+let gyroEnabled = false;
+let alpha = 0, beta = 0, gamma = 0;   // raw device orientation
+let alphaOffset = 0;                   // for recentering
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+async function init() {
+  // 1. Request camera
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' }, // back camera
-        width:  { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
+      video:{ facingMode:{ ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} },
+      audio:false
     });
-    const video = document.getElementById('cam');
-    video.srcObject = stream;
-    video.onloadedmetadata = () => {
-      video.play();
-      document.getElementById('perm-screen').classList.add('hidden');
-      document.getElementById('sdot').classList.add('on');
-      document.getElementById('slabel').textContent = 'Cámara activa ✓';
-      document.getElementById('obj-panel').classList.add('show');
-      initThree();
-    };
+    const vid = document.getElementById('cam');
+    vid.srcObject = stream;
+    await vid.play();
   } catch(e) {
-    document.getElementById('slabel').textContent = 'Error: ' + e.message;
-    alert('No se pudo acceder a la cámara.\n\nAsegúrate de:\n1. Abrir en Chrome\n2. Aceptar el permiso de cámara\n3. Usar HTTPS (Netlify URL)');
+    alert('Error de cámara: ' + e.message + '\n\nUsa Chrome y abre en HTTPS (Netlify).');
+    return;
   }
-}
 
-// ─────────────────────────────────────────
-//  THREE.JS SCENE
-// ─────────────────────────────────────────
-let scene, camera3d, renderer, animating = true;
-let mainMesh, ring1, ring2, orb1, orb2, particles;
-let currentColor = '#6ec6ff';
-let fpsCounter = 0, fpsLast = Date.now();
-
-function initThree() {
-  const canvas = document.getElementById('three-canvas');
-
-  // Renderer — transparent so camera shows through
-  renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x000000, 0); // fully transparent
-
-  // Scene
-  scene = new THREE.Scene();
-
-  // Camera
-  camera3d = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
-  camera3d.position.set(0, 0, 3.5);
-
-  // Lights
-  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-  scene.add(ambient);
-
-  const light1 = new THREE.PointLight(0x6ec6ff, 2, 10);
-  light1.position.set(2, 3, 2);
-  scene.add(light1);
-
-  const light2 = new THREE.PointLight(0xa78bfa, 1.5, 10);
-  light2.position.set(-2, -1, 1);
-  scene.add(light2);
-
-  const light3 = new THREE.DirectionalLight(0xffffff, 0.8);
-  light3.position.set(0, 5, 5);
-  scene.add(light3);
-
-  // ── Main object: Icosahedron ──
-  const geo = new THREE.IcosahedronGeometry(0.6, 1);
-  const mat = new THREE.MeshPhongMaterial({
-    color: new THREE.Color(currentColor),
-    shininess: 120,
-    specular: new THREE.Color(0xffffff),
-    transparent: true,
-    opacity: 0.92
-  });
-  mainMesh = new THREE.Mesh(geo, mat);
-  scene.add(mainMesh);
-
-  // Wireframe overlay
-  const wireMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff, wireframe: true, transparent: true, opacity: 0.08
-  });
-  const wireMesh = new THREE.Mesh(geo, wireMat);
-  mainMesh.add(wireMesh);
-
-  // ── Ring 1 ──
-  const ringGeo = new THREE.TorusGeometry(1.05, 0.025, 8, 64);
-  const ringMat = new THREE.MeshPhongMaterial({ color: 0xa78bfa, transparent: true, opacity: 0.75 });
-  ring1 = new THREE.Mesh(ringGeo, ringMat);
-  ring1.rotation.x = Math.PI / 2;
-  scene.add(ring1);
-
-  // ── Ring 2 ──
-  const ring2Geo = new THREE.TorusGeometry(0.85, 0.018, 8, 64);
-  const ring2Mat = new THREE.MeshPhongMaterial({ color: 0x34d399, transparent: true, opacity: 0.6 });
-  ring2 = new THREE.Mesh(ring2Geo, ring2Mat);
-  ring2.rotation.x = Math.PI / 3;
-  ring2.rotation.y = Math.PI / 5;
-  scene.add(ring2);
-
-  // ── Orbiting spheres ──
-  const orbGeo = new THREE.SphereGeometry(0.1, 16, 16);
-
-  orb1 = new THREE.Mesh(orbGeo, new THREE.MeshPhongMaterial({ color: 0xf59e0b, shininess: 200 }));
-  scene.add(orb1);
-
-  orb2 = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16),
-    new THREE.MeshPhongMaterial({ color: 0xf87171, shininess: 200 }));
-  scene.add(orb2);
-
-  // ── Particle field ──
-  const pCount = 120;
-  const pGeo = new THREE.BufferGeometry();
-  const pPos = new Float32Array(pCount * 3);
-  for (let i = 0; i < pCount * 3; i++) {
-    pPos[i] = (Math.random() - 0.5) * 6;
+  // 2. Request gyroscope (iOS 13+ needs permission)
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm !== 'granted') {
+        alert('Permiso de giroscopio denegado. El objeto igualmente se mostrará sin seguimiento.');
+      }
+    } catch(e) {}
   }
-  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-  const pMat = new THREE.PointsMaterial({ color: 0x6ec6ff, size: 0.03, transparent: true, opacity: 0.5 });
-  particles = new THREE.Points(pGeo, pMat);
-  scene.add(particles);
 
-  // Resize handler
-  window.addEventListener('resize', () => {
-    camera3d.aspect = window.innerWidth / window.innerHeight;
-    camera3d.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  // 3. Start gyro listener
+  window.addEventListener('deviceorientation', onGyro, true);
 
-  // Touch / click to interact
-  document.getElementById('three-canvas').style.pointerEvents = 'auto';
-  document.getElementById('three-canvas').addEventListener('click', onTap);
+  // 4. Build Three.js scene
+  buildScene();
 
+  // 5. Hide start screen, show UI
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('badge').textContent = 'AR Activo';
+  document.getElementById('gyro-indicator').classList.add('show');
+  document.getElementById('color-bar').classList.add('show');
+  document.getElementById('bottom-bar').classList.add('show');
+  document.getElementById('compass').classList.add('show');
+
+  // Show hint
+  showHint('🌀 Mueve el celular para explorar el objeto');
+
+  // Animate
   animate();
 }
 
-// ─────────────────────────────────────────
+// ═══════════════════════════════════════════
+//  GYROSCOPE
+// ═══════════════════════════════════════════
+function onGyro(e) {
+  if (e.alpha === null) return;
+  gyroEnabled = true;
+  alpha = e.alpha || 0;   // compass heading (Z axis) 0-360
+  beta  = e.beta  || 0;   // front-back tilt (-180 to 180)
+  gamma = e.gamma || 0;   // left-right tilt (-90 to 90)
+
+  document.getElementById('gyro-status').textContent = 'Activo ✓';
+  document.getElementById('val-a').textContent = Math.round(alpha) + '°';
+  document.getElementById('val-b').textContent = Math.round(beta)  + '°';
+  document.getElementById('val-g').textContent = Math.round(gamma) + '°';
+
+  // Update compass needle
+  const needle = document.getElementById('compass-needle');
+  needle.style.transform = `translate(-50%,-100%) rotate(${alpha - alphaOffset}deg)`;
+}
+
+// ═══════════════════════════════════════════
+//  THREE.JS SCENE
+// ═══════════════════════════════════════════
+function buildScene() {
+  const canvas = document.getElementById('three-canvas');
+  renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
+
+  scene = new THREE.Scene();
+
+  cam3d = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
+  cam3d.position.set(0, 0, 3.5);
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const pl1 = new THREE.PointLight(0x6ec6ff, 2.5, 12);
+  pl1.position.set(3, 3, 3); scene.add(pl1);
+  const pl2 = new THREE.PointLight(0xa78bfa, 1.8, 10);
+  pl2.position.set(-3, -1, 1); scene.add(pl2);
+  const dl = new THREE.DirectionalLight(0xffffff, 0.7);
+  dl.position.set(0, 5, 5); scene.add(dl);
+
+  // ── Main: Icosahedron ──
+  const icoGeo = new THREE.IcosahedronGeometry(0.65, 1);
+  const icoMat = new THREE.MeshPhongMaterial({
+    color: 0x6ec6ff, shininess:150,
+    specular: new THREE.Color(0xffffff),
+    transparent:true, opacity:0.93
+  });
+  mainMesh = new THREE.Mesh(icoGeo, icoMat);
+  scene.add(mainMesh);
+
+  // Wireframe overlay
+  mainMesh.add(new THREE.Mesh(icoGeo,
+    new THREE.MeshBasicMaterial({ color:0xffffff, wireframe:true, transparent:true, opacity:0.07 })
+  ));
+
+  // ── Rings ──
+  ring1 = new THREE.Mesh(
+    new THREE.TorusGeometry(1.1, 0.028, 8, 80),
+    new THREE.MeshPhongMaterial({ color:0xa78bfa, transparent:true, opacity:0.75 })
+  );
+  ring1.rotation.x = Math.PI/2;
+  scene.add(ring1);
+
+  ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(0.88, 0.018, 8, 64),
+    new THREE.MeshPhongMaterial({ color:0x34d399, transparent:true, opacity:0.6 })
+  );
+  ring2.rotation.set(Math.PI/3, Math.PI/5, 0);
+  scene.add(ring2);
+
+  // ── Orbiting spheres ──
+  orb1 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1, 16, 16),
+    new THREE.MeshPhongMaterial({ color:0xf59e0b, shininess:200 })
+  );
+  scene.add(orb1);
+
+  orb2 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.07, 16, 16),
+    new THREE.MeshPhongMaterial({ color:0xf87171, shininess:200 })
+  );
+  scene.add(orb2);
+
+  // ── Particles ──
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(200 * 3);
+  for (let i=0; i<200*3; i++) pPos[i] = (Math.random()-.5)*8;
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
+  particleSystem = new THREE.Points(pGeo,
+    new THREE.PointsMaterial({ color:0x6ec6ff, size:0.025, transparent:true, opacity:0.4 })
+  );
+  scene.add(particleSystem);
+
+  // Resize
+  window.addEventListener('resize', ()=>{
+    cam3d.aspect = window.innerWidth/window.innerHeight;
+    cam3d.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+// ═══════════════════════════════════════════
 //  ANIMATION LOOP
-// ─────────────────────────────────────────
+// ═══════════════════════════════════════════
 let t = 0;
 function animate() {
   requestAnimationFrame(animate);
-  if (!animating) return;
-
+  if (paused) return;
   t += 0.016;
 
-  // Main object rotation
-  mainMesh.rotation.x += 0.008;
-  mainMesh.rotation.y += 0.014;
+  // ── Apply gyroscope to camera ──
+  // This makes the 3D world feel "anchored" in real space.
+  // As you rotate the phone, the camera moves around the object.
+  if (gyroEnabled) {
+    const aRad = THREE.MathUtils.degToRad(alpha - alphaOffset);
+    const bRad = THREE.MathUtils.degToRad(beta  - 90);  // subtract 90 so upright = looking forward
+    const gRad = THREE.MathUtils.degToRad(gamma);
 
-  // Floating motion
-  mainMesh.position.y = Math.sin(t * 0.9) * 0.18;
+    // Smooth interpolation for fluid movement
+    const targetX = Math.sin(bRad) * 3.5;
+    const targetY = Math.sin(gRad) * 3.5;
+    const targetZ = Math.cos(bRad) * 3.5;
 
-  // Rings rotation
-  ring1.rotation.z += 0.009;
-  ring2.rotation.z -= 0.006;
-  ring2.rotation.x += 0.004;
-
-  // Orbiting spheres
-  orb1.position.x = Math.cos(t * 0.8) * 1.05;
-  orb1.position.z = Math.sin(t * 0.8) * 1.05;
-  orb1.position.y = Math.sin(t * 1.4) * 0.3;
-
-  orb2.position.x = Math.cos(t * 1.1 + Math.PI) * 0.85;
-  orb2.position.z = Math.sin(t * 1.1 + Math.PI) * 0.85;
-  orb2.position.y = Math.cos(t * 0.9) * 0.25;
-
-  // Particles slow drift
-  particles.rotation.y += 0.001;
-  particles.rotation.x += 0.0005;
-
-  // FPS counter
-  fpsCounter++;
-  const now = Date.now();
-  if (now - fpsLast > 1000) {
-    document.getElementById('fps-val').textContent = fpsCounter;
-    fpsCounter = 0;
-    fpsLast = now;
+    cam3d.position.x += (targetX - cam3d.position.x) * 0.08;
+    cam3d.position.y += (targetY - cam3d.position.y) * 0.08;
+    cam3d.position.z += (targetZ - cam3d.position.z) * 0.08;
+    cam3d.lookAt(0, 0, 0);
   }
 
-  renderer.render(scene, camera3d);
+  // ── Object animations ──
+  // Subtle self-rotation (gyro controls camera angle, this adds life)
+  mainMesh.rotation.y += 0.005;
+  mainMesh.rotation.x += 0.003;
+
+  // Float
+  mainMesh.position.y = Math.sin(t * 0.8) * 0.12;
+
+  // Rings
+  ring1.rotation.z += 0.007;
+  ring2.rotation.z -= 0.005;
+  ring2.rotation.x += 0.003;
+
+  // Orbiting spheres
+  orb1.position.set(
+    Math.cos(t * 0.7) * 1.1,
+    Math.sin(t * 1.2) * 0.25,
+    Math.sin(t * 0.7) * 1.1
+  );
+  orb2.position.set(
+    Math.cos(t * 1.0 + Math.PI) * 0.88,
+    Math.cos(t * 0.8) * 0.2,
+    Math.sin(t * 1.0 + Math.PI) * 0.88
+  );
+
+  // Particles slow drift
+  particleSystem.rotation.y += 0.0008;
+
+  // FPS
+  fpsCount++;
+  const now = Date.now();
+  if (now - fpsLast > 1000) {
+    document.getElementById('fps-val').textContent = fpsCount;
+    fpsCount = 0; fpsLast = now;
+  }
+
+  renderer.render(scene, cam3d);
 }
 
-// ─────────────────────────────────────────
+// ═══════════════════════════════════════════
 //  UI CONTROLS
-// ─────────────────────────────────────────
-function togglePanel() {
-  document.getElementById('obj-panel').classList.toggle('show');
+// ═══════════════════════════════════════════
+function toggleInfo() {
+  document.getElementById('info-panel').classList.toggle('show');
 }
 
-function toggleAnimation() {
-  animating = !animating;
-  const btn = event.target;
-  btn.textContent = animating ? '⏸ Pausa' : '▶ Play';
+function togglePause() {
+  paused = !paused;
+  event.target.textContent = paused ? '▶' : '⏸';
 }
 
-function resetObject() {
-  if (!mainMesh) return;
-  mainMesh.scale.set(0.01, 0.01, 0.01);
-  let s = 0.01;
-  const grow = setInterval(() => {
-    s = Math.min(s + 0.06, 1);
-    mainMesh.scale.set(s, s, s);
-    if (s >= 1) clearInterval(grow);
-  }, 16);
+function recenter() {
+  // Reset the alpha offset to current heading = "forward"
+  alphaOffset = alpha;
+  showHint('✓ Recentrado — esto es el frente');
 }
 
 function setColor(hex, el) {
-  currentColor = hex;
-  if (mainMesh) {
-    mainMesh.material.color.set(hex);
-  }
-  document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+  if (mainMesh) mainMesh.material.color.set(hex);
+  document.querySelectorAll('.cdot').forEach(d => d.classList.remove('active'));
   el.classList.add('active');
 }
 
-function onTap(e) {
-  if (!mainMesh) return;
-  // Scale bounce on tap
-  mainMesh.scale.set(1.3, 1.3, 1.3);
-  setTimeout(() => mainMesh.scale.set(1, 1, 1), 200);
+function showHint(msg) {
+  const old = document.getElementById('hint');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'hint'; div.textContent = msg;
+  document.getElementById('hud').appendChild(div);
+  setTimeout(() => div.remove(), 4500);
 }
 </script>
 </body>
