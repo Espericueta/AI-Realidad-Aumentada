@@ -3,443 +3,299 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-<title>Tarea 3.2 — AR con Giroscopio</title>
+<title>Tarea 3.2 — AR Giroscopio</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#000; font-family:'Segoe UI',sans-serif; overflow:hidden; height:100dvh; }
-
-#cam {
-  position:fixed; inset:0;
-  width:100%; height:100%;
-  object-fit:cover; z-index:0;
-}
-#three-canvas {
-  position:fixed; inset:0;
-  width:100%; height:100%;
-  z-index:1; pointer-events:none;
-}
+#cam { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+#three-canvas { position:fixed; inset:0; width:100%; height:100%; z-index:1; pointer-events:none; }
 #hud { position:fixed; inset:0; z-index:10; pointer-events:none; }
 
-/* ── Permission / Start screen ── */
+/* Start screen */
 #start-screen {
   position:fixed; inset:0; z-index:999;
-  background:linear-gradient(160deg,#07091a 0%,#0e1a2e 60%,#07091a 100%);
-  display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-  padding:36px; text-align:center;
-  transition:opacity .7s ease;
+  background:linear-gradient(160deg,#07091a,#0e1a2e 60%,#07091a);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:36px; text-align:center; transition:opacity .7s ease;
 }
 #start-screen.hidden { opacity:0; pointer-events:none; }
-
-.start-orb {
-  width:110px; height:110px;
-  border-radius:50%;
-  background:radial-gradient(circle at 35% 35%, #6ec6ff, #3b6fd4 50%, #1a2a6c);
-  box-shadow:0 0 60px rgba(110,198,255,.4), 0 0 120px rgba(110,198,255,.15);
-  margin-bottom:28px;
-  animation:orbpulse 3s ease-in-out infinite;
+.orb {
+  width:100px; height:100px; border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#6ec6ff,#3b6fd4 50%,#1a2a6c);
+  box-shadow:0 0 60px rgba(110,198,255,.4);
+  margin-bottom:24px;
+  animation:op 3s ease-in-out infinite;
 }
-@keyframes orbpulse {
-  0%,100%{ transform:scale(1); box-shadow:0 0 60px rgba(110,198,255,.4); }
-  50%{ transform:scale(1.06); box-shadow:0 0 90px rgba(110,198,255,.6); }
-}
-.start-title { color:#fff; font-size:26px; font-weight:800; letter-spacing:1px; margin-bottom:8px; }
-.start-sub { color:#6ec6ff; font-size:13px; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px; }
-.start-desc { color:rgba(255,255,255,.5); font-size:14px; line-height:1.8; margin-bottom:36px; max-width:280px; }
-.start-btn {
-  background:linear-gradient(135deg,#6ec6ff,#a78bfa);
-  border:none; color:#000; font-size:16px; font-weight:800;
+@keyframes op{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.s-title { color:#fff; font-size:24px; font-weight:800; margin-bottom:8px; }
+.s-sub { color:#6ec6ff; font-size:12px; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px; }
+.s-desc { color:rgba(255,255,255,.5); font-size:14px; line-height:1.8; margin-bottom:32px; max-width:280px; }
+.s-btn {
+  background:linear-gradient(135deg,#6ec6ff,#a78bfa); border:none;
+  color:#000; font-size:16px; font-weight:800;
   padding:16px 44px; border-radius:40px; cursor:pointer;
-  box-shadow:0 0 40px rgba(110,198,255,.35);
-  transition:transform .15s;
 }
-.start-btn:active { transform:scale(.95); }
-.start-note { color:rgba(255,255,255,.25); font-size:11px; margin-top:18px; line-height:1.6; }
+.s-btn:active{transform:scale(.95)}
+.s-note { color:rgba(255,255,255,.25); font-size:11px; margin-top:14px; line-height:1.6; }
 
-/* ── HUD top ── */
+/* Top bar */
 .top-bar {
   position:absolute; top:0; left:0; right:0;
   padding:14px 18px 10px;
-  background:linear-gradient(to bottom,rgba(0,0,0,.6),transparent);
+  background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent);
   display:flex; align-items:center; justify-content:space-between;
 }
 .top-title { color:#fff; font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
 .badge {
   background:rgba(110,198,255,.18); border:1px solid rgba(110,198,255,.4);
-  color:#6ec6ff; font-size:10px; font-weight:700;
-  letter-spacing:1px; padding:3px 10px; border-radius:20px;
+  color:#6ec6ff; font-size:10px; font-weight:700; letter-spacing:1px; padding:3px 10px; border-radius:20px;
 }
 
-/* ── Gyro indicator ── */
-#gyro-indicator {
-  position:absolute; top:68px; left:50%;
-  transform:translateX(-50%);
-  display:flex; align-items:center; gap:8px;
-  background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.1);
-  border-radius:20px; padding:6px 14px;
+/* Crosshair */
+.xhair { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:52px; height:52px; }
+.xh-ring { width:52px; height:52px; border:1.5px solid rgba(110,198,255,.5); border-radius:50%; animation:xhp 2.5s ease-in-out infinite; }
+.xh-dot { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:5px; height:5px; background:#6ec6ff; border-radius:50%; }
+@keyframes xhp{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.14)}}
+.corners { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:140px; height:140px; }
+.cor { position:absolute; width:18px; height:18px; border-color:rgba(110,198,255,.4); border-style:solid; }
+.cor.tl{top:0;left:0;border-width:2px 0 0 2px}
+.cor.tr{top:0;right:0;border-width:2px 2px 0 0}
+.cor.bl{bottom:0;left:0;border-width:0 0 2px 2px}
+.cor.br{bottom:0;right:0;border-width:0 2px 2px 0}
+
+/* Gyro data strip */
+#gyro-strip {
+  position:absolute; top:62px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.1);
+  border-radius:20px; padding:5px 16px;
+  display:flex; gap:14px; align-items:center;
   opacity:0; transition:opacity .4s;
 }
-#gyro-indicator.show { opacity:1; }
-.gyro-dot { width:8px; height:8px; border-radius:50%; background:#34d399; }
-.gyro-text { color:rgba(255,255,255,.7); font-size:11px; }
+#gyro-strip.show{opacity:1}
+.gs-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.gs-lbl { color:rgba(255,255,255,.35); font-size:9px; letter-spacing:.5px; }
+.gs-val { color:#6ec6ff; font-size:12px; font-weight:700; min-width:36px; text-align:center; }
 
-/* ── Crosshair ── */
-.crosshair {
-  position:absolute; top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  width:56px; height:56px; pointer-events:none;
-}
-.ch-ring {
-  width:56px; height:56px;
-  border:1.5px solid rgba(110,198,255,.5);
-  border-radius:50%;
-  animation:chpulse 2.5s ease-in-out infinite;
-}
-.ch-dot {
-  position:absolute; top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  width:5px; height:5px; background:#6ec6ff; border-radius:50%;
-}
-@keyframes chpulse { 0%,100%{opacity:.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.15)} }
-
-/* Corner brackets */
-.corners {
-  position:absolute; top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  width:150px; height:150px;
-}
-.corner {
-  position:absolute; width:20px; height:20px;
-  border-color:rgba(110,198,255,.45); border-style:solid;
-}
-.corner.tl{top:0;left:0;border-width:2px 0 0 2px}
-.corner.tr{top:0;right:0;border-width:2px 2px 0 0}
-.corner.bl{bottom:0;left:0;border-width:0 0 2px 2px}
-.corner.br{bottom:0;right:0;border-width:0 2px 2px 0}
-
-/* ── Compass / rotation display ── */
-#compass {
-  position:absolute; top:50%; right:14px;
-  transform:translateY(-50%);
-  display:flex; flex-direction:column; align-items:center; gap:4px;
-  opacity:0; transition:opacity .4s;
-}
-#compass.show { opacity:1; }
-.compass-ring {
-  width:52px; height:52px;
-  border:1.5px solid rgba(255,255,255,.2);
-  border-radius:50%; position:relative;
-  background:rgba(0,0,0,.4);
-}
-#compass-needle {
-  position:absolute; top:50%; left:50%;
-  width:2px; height:20px;
-  background:linear-gradient(to bottom,#6ec6ff,transparent);
-  transform-origin:bottom center;
-  transform:translate(-50%,-100%);
-  transition:transform .1s ease;
-}
-.compass-label { color:rgba(255,255,255,.4); font-size:10px; }
-
-/* ── Info panel ── */
-#info-panel {
-  position:absolute; top:68px; left:14px;
-  background:rgba(5,12,28,.82); border:1px solid rgba(167,139,250,.25);
-  border-radius:14px; padding:14px 16px; min-width:140px;
-  opacity:0; transform:translateX(-16px);
-  transition:all .4s ease; pointer-events:none;
-}
-#info-panel.show { opacity:1; transform:translateX(0); pointer-events:auto; }
-.il { font-size:10px; color:#a78bfa; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
-.iv { font-size:13px; color:#fff; font-weight:700; margin-bottom:10px; }
-.ir { display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,.4); margin-bottom:3px; }
-
-/* ── Hint toast ── */
-#hint {
-  position:absolute; bottom:110px; left:50%;
-  transform:translateX(-50%);
-  background:rgba(0,0,0,.72); border:1px solid rgba(255,255,255,.12);
-  border-radius:24px; padding:9px 20px;
-  color:rgba(255,255,255,.75); font-size:12px;
-  white-space:nowrap; pointer-events:none;
-  animation:hintfade 4s ease forwards;
-}
-@keyframes hintfade { 0%{opacity:0;transform:translateX(-50%) translateY(8px)} 15%{opacity:1;transform:translateX(-50%) translateY(0)} 75%{opacity:1} 100%{opacity:0} }
-
-/* ── Color bar ── */
-#color-bar {
-  position:absolute; bottom:86px; left:50%;
-  transform:translateX(-50%);
-  display:flex; gap:10px; pointer-events:auto;
-  opacity:0; transition:opacity .4s;
-}
-#color-bar.show { opacity:1; }
-.cdot {
-  width:30px; height:30px; border-radius:50%; cursor:pointer;
-  border:2.5px solid transparent; transition:transform .2s,border-color .2s;
-  box-shadow:0 2px 8px rgba(0,0,0,.4);
-}
-.cdot:active { transform:scale(1.25); }
-.cdot.active { border-color:#fff; }
-
-/* ── Bottom bar ── */
-.bottom-bar {
+/* Bottom bar */
+.bot {
   position:absolute; bottom:0; left:0; right:0;
   padding:10px 20px 28px;
   background:linear-gradient(to top,rgba(0,0,0,.6),transparent);
   display:flex; align-items:center; justify-content:space-around;
   pointer-events:auto; opacity:0; transition:opacity .4s;
 }
-.bottom-bar.show { opacity:1; }
+.bot.show{opacity:1}
 .btn {
-  background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.2);
   color:#fff; font-size:13px; font-weight:600;
   padding:10px 20px; border-radius:24px; cursor:pointer;
-  transition:background .2s,transform .1s;
 }
-.btn:active { transform:scale(.93); background:rgba(255,255,255,.22); }
-.btn.primary { background:linear-gradient(135deg,#6ec6ff,#a78bfa); border:none; color:#000; font-weight:800; }
+.btn:active{transform:scale(.93);background:rgba(255,255,255,.22)}
+.btn.p{background:linear-gradient(135deg,#6ec6ff,#a78bfa);border:none;color:#000;font-weight:800}
+
+/* Color bar */
+#cbar {
+  position:absolute; bottom:80px; left:50%; transform:translateX(-50%);
+  display:flex; gap:10px; pointer-events:auto; opacity:0; transition:opacity .4s;
+}
+#cbar.show{opacity:1}
+.cd {
+  width:28px; height:28px; border-radius:50%; cursor:pointer;
+  border:2.5px solid transparent; transition:transform .15s,border-color .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.cd:active{transform:scale(1.25)}
+.cd.active{border-color:#fff}
+
+/* Hint toast */
+.hint {
+  position:absolute; bottom:118px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.7); border:1px solid rgba(255,255,255,.12);
+  border-radius:24px; padding:8px 18px;
+  color:rgba(255,255,255,.8); font-size:12px; white-space:nowrap;
+  pointer-events:none; animation:hf 3.5s ease forwards;
+}
+@keyframes hf{0%{opacity:0;transform:translateX(-50%) translateY(6px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}75%{opacity:1}100%{opacity:0}}
 </style>
 </head>
 <body>
 
-<!-- Start screen -->
 <div id="start-screen">
-  <div class="start-orb"></div>
-  <div class="start-title">Realidad Aumentada</div>
-  <div class="start-sub">Tarea 3.2 · Giroscopio</div>
-  <div class="start-desc">
-    El objeto 3D quedará <strong style="color:#6ec6ff">anclado en el espacio real</strong>.<br>
-    Mueve el celular para verlo desde distintos ángulos, como si existiera en tu cuarto.
-  </div>
-  <button class="start-btn" onclick="init()">🚀 Iniciar Experiencia AR</button>
-  <div class="start-note">
-    Se solicitará acceso a la cámara y al giroscopio.<br>
-    Abre en Chrome para mejor compatibilidad.
-  </div>
+  <div class="orb"></div>
+  <div class="s-title">Realidad Aumentada</div>
+  <div class="s-sub">Tarea 3.2 · Giroscopio</div>
+  <div class="s-desc">El objeto 3D queda <strong style="color:#6ec6ff">anclado en el espacio</strong>. Mueve el celular para verlo desde distintos ángulos.</div>
+  <button class="s-btn" onclick="init()">🚀 Iniciar AR</button>
+  <div class="s-note">Requiere Chrome · Cámara · Giroscopio</div>
 </div>
 
-<!-- Camera -->
 <video id="cam" autoplay playsinline muted></video>
-<!-- Three.js canvas -->
 <canvas id="three-canvas"></canvas>
 
-<!-- HUD -->
 <div id="hud">
   <div class="top-bar">
     <span class="top-title">AR · Giroscopio</span>
     <span class="badge" id="badge">Iniciando...</span>
   </div>
 
-  <div id="gyro-indicator">
-    <div class="gyro-dot"></div>
-    <span class="gyro-text">Giroscopio activo</span>
+  <div id="gyro-strip">
+    <div class="gs-item"><span class="gs-lbl">GIRO α</span><span class="gs-val" id="va">0°</span></div>
+    <div class="gs-item"><span class="gs-lbl">INCL β</span><span class="gs-val" id="vb">0°</span></div>
+    <div class="gs-item"><span class="gs-lbl">LADO γ</span><span class="gs-val" id="vg">0°</span></div>
+    <div class="gs-item"><span class="gs-lbl">FPS</span><span class="gs-val" id="fps">--</span></div>
   </div>
 
-  <div class="crosshair">
-    <div class="ch-ring"></div>
-    <div class="ch-dot"></div>
-  </div>
+  <div class="xhair"><div class="xh-ring"></div><div class="xh-dot"></div></div>
   <div class="corners">
-    <div class="corner tl"></div><div class="corner tr"></div>
-    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="cor tl"></div><div class="cor tr"></div>
+    <div class="cor bl"></div><div class="cor br"></div>
   </div>
 
-  <div id="compass">
-    <div class="compass-ring">
-      <div id="compass-needle"></div>
-    </div>
-    <span class="compass-label">Rotación</span>
+  <div id="cbar">
+    <div class="cd active" style="background:#6ec6ff" onclick="setColor('#6ec6ff',this)"></div>
+    <div class="cd" style="background:#a78bfa" onclick="setColor('#a78bfa',this)"></div>
+    <div class="cd" style="background:#34d399" onclick="setColor('#34d399',this)"></div>
+    <div class="cd" style="background:#f59e0b" onclick="setColor('#f59e0b',this)"></div>
+    <div class="cd" style="background:#f87171" onclick="setColor('#f87171',this)"></div>
   </div>
 
-  <div id="info-panel">
-    <div class="il">Objeto AR</div>
-    <div class="iv">Icosaedro 3D</div>
-    <div class="ir"><span>Giroscopio</span><span id="gyro-status">--</span></div>
-    <div class="ir"><span>α (Z)</span><span id="val-a">0°</span></div>
-    <div class="ir"><span>β (X)</span><span id="val-b">0°</span></div>
-    <div class="ir"><span>γ (Y)</span><span id="val-g">0°</span></div>
-    <div class="ir"><span>FPS</span><span id="fps-val">--</span></div>
-  </div>
-
-  <div id="color-bar">
-    <div class="cdot active" style="background:#6ec6ff" onclick="setColor('#6ec6ff',this)"></div>
-    <div class="cdot" style="background:#a78bfa" onclick="setColor('#a78bfa',this)"></div>
-    <div class="cdot" style="background:#34d399" onclick="setColor('#34d399',this)"></div>
-    <div class="cdot" style="background:#f59e0b" onclick="setColor('#f59e0b',this)"></div>
-    <div class="cdot" style="background:#f87171" onclick="setColor('#f87171',this)"></div>
-  </div>
-
-  <div class="bottom-bar" id="bottom-bar">
-    <button class="btn" onclick="toggleInfo()">Info</button>
-    <button class="btn" onclick="togglePause()">⏸</button>
-    <button class="btn primary" onclick="recenter()">Recentrar</button>
+  <div class="bot" id="bot">
+    <button class="btn" onclick="togglePause(this)">⏸ Pausa</button>
+    <button class="btn p" onclick="recenter()">Recentrar</button>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// ═══════════════════════════════════════════
-//  STATE
-// ═══════════════════════════════════════════
+// ── Gyro state (raw + smoothed) ──
+let rawA=0, rawB=0, rawG=0;
+let smA=0, smB=0, smG=0;   // smoothed values
+let alphaOffset=0;
+let gyroReady=false;
+
+// Smoothing factor: 0=no movement, 1=instant snap
+// 0.06 = very smooth, 0.12 = responsive but not jittery
+const SMOOTH = 0.07;
+
+// ── Three.js ──
 let renderer, scene, cam3d;
-let mainMesh, ring1, ring2, orb1, orb2, particleSystem;
-let paused = false;
-let fpsCount = 0, fpsLast = Date.now();
+let mainMesh, ring1, ring2, orb1, orb2;
+let paused=false;
+let fpsCount=0, fpsLast=Date.now();
+let t=0;
 
-// Gyroscope state
-let gyroEnabled = false;
-let alpha = 0, beta = 0, gamma = 0;   // raw device orientation
-let alphaOffset = 0;                   // for recentering
+// ── Camera target (for smooth lerp) ──
+let camTarget = new THREE.Vector3(0,0,3.5);
+let camCurrent = new THREE.Vector3(0,0,3.5);
 
-// ═══════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════
+// ────────────────────────────────────────
 async function init() {
-  // 1. Request camera
+  // Camera
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} },
+      video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} },
       audio:false
     });
     const vid = document.getElementById('cam');
     vid.srcObject = stream;
     await vid.play();
   } catch(e) {
-    alert('Error de cámara: ' + e.message + '\n\nUsa Chrome y abre en HTTPS (Netlify).');
+    alert('Error cámara: ' + e.message + '\n\nUsa Chrome con HTTPS (Netlify).');
     return;
   }
 
-  // 2. Request gyroscope (iOS 13+ needs permission)
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      const perm = await DeviceOrientationEvent.requestPermission();
-      if (perm !== 'granted') {
-        alert('Permiso de giroscopio denegado. El objeto igualmente se mostrará sin seguimiento.');
-      }
-    } catch(e) {}
+  // iOS gyro permission
+  if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+    try { await DeviceOrientationEvent.requestPermission(); } catch(e) {}
   }
 
-  // 3. Start gyro listener
-  window.addEventListener('deviceorientation', onGyro, true);
+  window.addEventListener('deviceorientation', onGyro, { passive:true });
 
-  // 4. Build Three.js scene
   buildScene();
 
-  // 5. Hide start screen, show UI
   document.getElementById('start-screen').classList.add('hidden');
-  document.getElementById('badge').textContent = 'AR Activo';
-  document.getElementById('gyro-indicator').classList.add('show');
-  document.getElementById('color-bar').classList.add('show');
-  document.getElementById('bottom-bar').classList.add('show');
-  document.getElementById('compass').classList.add('show');
+  document.getElementById('badge').textContent = 'AR Activo ✓';
+  document.getElementById('gyro-strip').classList.add('show');
+  document.getElementById('cbar').classList.add('show');
+  document.getElementById('bot').classList.add('show');
 
-  // Show hint
-  showHint('🌀 Mueve el celular para explorar el objeto');
-
-  // Animate
-  animate();
+  hint('🌀 Mueve el celular para girar alrededor del objeto');
+  requestAnimationFrame(loop);
 }
 
-// ═══════════════════════════════════════════
-//  GYROSCOPE
-// ═══════════════════════════════════════════
+// ────────────────────────────────────────
+//  GYRO — only store raw values here, NO Three.js calls
+// ────────────────────────────────────────
 function onGyro(e) {
-  if (e.alpha === null) return;
-  gyroEnabled = true;
-  alpha = e.alpha || 0;   // compass heading (Z axis) 0-360
-  beta  = e.beta  || 0;   // front-back tilt (-180 to 180)
-  gamma = e.gamma || 0;   // left-right tilt (-90 to 90)
-
-  document.getElementById('gyro-status').textContent = 'Activo ✓';
-  document.getElementById('val-a').textContent = Math.round(alpha) + '°';
-  document.getElementById('val-b').textContent = Math.round(beta)  + '°';
-  document.getElementById('val-g').textContent = Math.round(gamma) + '°';
-
-  // Update compass needle
-  const needle = document.getElementById('compass-needle');
-  needle.style.transform = `translate(-50%,-100%) rotate(${alpha - alphaOffset}deg)`;
+  if (e.alpha == null) return;
+  rawA = e.alpha;
+  rawB = e.beta;
+  rawG = e.gamma;
+  gyroReady = true;
 }
 
-// ═══════════════════════════════════════════
-//  THREE.JS SCENE
-// ═══════════════════════════════════════════
+// ────────────────────────────────────────
+//  SCENE
+// ────────────────────────────────────────
 function buildScene() {
   const canvas = document.getElementById('three-canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
+  renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true, powerPreference:'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x000000, 0);
+  renderer.setClearColor(0,0);
 
   scene = new THREE.Scene();
 
   cam3d = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-  cam3d.position.set(0, 0, 3.5);
+  cam3d.position.set(0,0,3.5);
 
   // Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   const pl1 = new THREE.PointLight(0x6ec6ff, 2.5, 12);
-  pl1.position.set(3, 3, 3); scene.add(pl1);
+  pl1.position.set(3,3,3); scene.add(pl1);
   const pl2 = new THREE.PointLight(0xa78bfa, 1.8, 10);
-  pl2.position.set(-3, -1, 1); scene.add(pl2);
-  const dl = new THREE.DirectionalLight(0xffffff, 0.7);
-  dl.position.set(0, 5, 5); scene.add(dl);
+  pl2.position.set(-3,-1,1); scene.add(pl2);
 
-  // ── Main: Icosahedron ──
-  const icoGeo = new THREE.IcosahedronGeometry(0.65, 1);
-  const icoMat = new THREE.MeshPhongMaterial({
-    color: 0x6ec6ff, shininess:150,
-    specular: new THREE.Color(0xffffff),
-    transparent:true, opacity:0.93
-  });
-  mainMesh = new THREE.Mesh(icoGeo, icoMat);
+  // Main object — low poly for performance
+  const geo = new THREE.IcosahedronGeometry(0.65, 0); // detail=0 = fastest
+  mainMesh = new THREE.Mesh(geo,
+    new THREE.MeshPhongMaterial({ color:0x6ec6ff, shininess:120, specular:0xffffff, transparent:true, opacity:0.92 })
+  );
   scene.add(mainMesh);
 
-  // Wireframe overlay
-  mainMesh.add(new THREE.Mesh(icoGeo,
-    new THREE.MeshBasicMaterial({ color:0xffffff, wireframe:true, transparent:true, opacity:0.07 })
+  // Wireframe
+  mainMesh.add(new THREE.Mesh(geo,
+    new THREE.MeshBasicMaterial({ color:0xffffff, wireframe:true, transparent:true, opacity:0.08 })
   ));
 
-  // ── Rings ──
+  // Rings — reduced segments for perf
   ring1 = new THREE.Mesh(
-    new THREE.TorusGeometry(1.1, 0.028, 8, 80),
-    new THREE.MeshPhongMaterial({ color:0xa78bfa, transparent:true, opacity:0.75 })
+    new THREE.TorusGeometry(1.05, 0.025, 6, 40),
+    new THREE.MeshPhongMaterial({ color:0xa78bfa, transparent:true, opacity:0.7 })
   );
   ring1.rotation.x = Math.PI/2;
   scene.add(ring1);
 
   ring2 = new THREE.Mesh(
-    new THREE.TorusGeometry(0.88, 0.018, 8, 64),
-    new THREE.MeshPhongMaterial({ color:0x34d399, transparent:true, opacity:0.6 })
+    new THREE.TorusGeometry(0.82, 0.018, 6, 32),
+    new THREE.MeshPhongMaterial({ color:0x34d399, transparent:true, opacity:0.55 })
   );
   ring2.rotation.set(Math.PI/3, Math.PI/5, 0);
   scene.add(ring2);
 
-  // ── Orbiting spheres ──
+  // Orbiting spheres — minimal poly
   orb1 = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 16, 16),
-    new THREE.MeshPhongMaterial({ color:0xf59e0b, shininess:200 })
+    new THREE.SphereGeometry(0.1, 8, 8),
+    new THREE.MeshPhongMaterial({ color:0xf59e0b })
   );
   scene.add(orb1);
 
   orb2 = new THREE.Mesh(
-    new THREE.SphereGeometry(0.07, 16, 16),
-    new THREE.MeshPhongMaterial({ color:0xf87171, shininess:200 })
+    new THREE.SphereGeometry(0.07, 8, 8),
+    new THREE.MeshPhongMaterial({ color:0xf87171 })
   );
   scene.add(orb2);
 
-  // ── Particles ──
-  const pGeo = new THREE.BufferGeometry();
-  const pPos = new Float32Array(200 * 3);
-  for (let i=0; i<200*3; i++) pPos[i] = (Math.random()-.5)*8;
-  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
-  particleSystem = new THREE.Points(pGeo,
-    new THREE.PointsMaterial({ color:0x6ec6ff, size:0.025, transparent:true, opacity:0.4 })
-  );
-  scene.add(particleSystem);
-
-  // Resize
   window.addEventListener('resize', ()=>{
     cam3d.aspect = window.innerWidth/window.innerHeight;
     cam3d.updateProjectionMatrix();
@@ -447,104 +303,98 @@ function buildScene() {
   });
 }
 
-// ═══════════════════════════════════════════
-//  ANIMATION LOOP
-// ═══════════════════════════════════════════
-let t = 0;
-function animate() {
-  requestAnimationFrame(animate);
+// ────────────────────────────────────────
+//  MAIN LOOP — gyro processing happens here, once per frame
+// ────────────────────────────────────────
+function loop() {
+  requestAnimationFrame(loop);
   if (paused) return;
   t += 0.016;
 
-  // ── Apply gyroscope to camera ──
-  // This makes the 3D world feel "anchored" in real space.
-  // As you rotate the phone, the camera moves around the object.
-  if (gyroEnabled) {
-    const aRad = THREE.MathUtils.degToRad(alpha - alphaOffset);
-    const bRad = THREE.MathUtils.degToRad(beta  - 90);  // subtract 90 so upright = looking forward
-    const gRad = THREE.MathUtils.degToRad(gamma);
+  // ── Smooth gyro values (exponential moving average) ──
+  if (gyroReady) {
+    // Handle alpha wraparound (0↔360)
+    let da = rawA - smA;
+    if (da > 180) da -= 360;
+    if (da < -180) da += 360;
+    smA += da * SMOOTH;
 
-    // Smooth interpolation for fluid movement
-    const targetX = Math.sin(bRad) * 3.5;
-    const targetY = Math.sin(gRad) * 3.5;
-    const targetZ = Math.cos(bRad) * 3.5;
+    smB += (rawB - smB) * SMOOTH;
+    smG += (rawG - smG) * SMOOTH;
 
-    cam3d.position.x += (targetX - cam3d.position.x) * 0.08;
-    cam3d.position.y += (targetY - cam3d.position.y) * 0.08;
-    cam3d.position.z += (targetZ - cam3d.position.z) * 0.08;
+    // Update UI only every 10 frames to reduce DOM work
+    if (Math.round(t * 60) % 10 === 0) {
+      document.getElementById('va').textContent = Math.round(smA) + '°';
+      document.getElementById('vb').textContent = Math.round(smB) + '°';
+      document.getElementById('vg').textContent = Math.round(smG) + '°';
+    }
+
+    // ── Move camera based on gyro ──
+    // beta (X tilt): phone tilted forward/back → move camera up/down
+    // gamma (Y tilt): phone tilted left/right → move camera left/right
+    // alpha (compass): phone rotated → orbit horizontally
+    const heading = THREE.MathUtils.degToRad(smA - alphaOffset);
+    const tilt    = THREE.MathUtils.degToRad(smB - 90); // 90=upright
+    const roll    = THREE.MathUtils.degToRad(smG);
+
+    const R = 3.5;
+    camTarget.x = R * Math.sin(heading) * Math.cos(tilt);
+    camTarget.y = R * Math.sin(tilt) + roll * 0.5;
+    camTarget.z = R * Math.cos(heading) * Math.cos(tilt);
+
+    // Lerp camera position — smooth, no jank
+    camCurrent.lerp(camTarget, 0.08);
+    cam3d.position.copy(camCurrent);
     cam3d.lookAt(0, 0, 0);
   }
 
-  // ── Object animations ──
-  // Subtle self-rotation (gyro controls camera angle, this adds life)
-  mainMesh.rotation.y += 0.005;
+  // Object animations
+  mainMesh.rotation.y += 0.006;
   mainMesh.rotation.x += 0.003;
+  mainMesh.position.y = Math.sin(t * 0.9) * 0.13;
 
-  // Float
-  mainMesh.position.y = Math.sin(t * 0.8) * 0.12;
+  ring1.rotation.z += 0.008;
+  ring2.rotation.z -= 0.006;
 
-  // Rings
-  ring1.rotation.z += 0.007;
-  ring2.rotation.z -= 0.005;
-  ring2.rotation.x += 0.003;
-
-  // Orbiting spheres
-  orb1.position.set(
-    Math.cos(t * 0.7) * 1.1,
-    Math.sin(t * 1.2) * 0.25,
-    Math.sin(t * 0.7) * 1.1
-  );
-  orb2.position.set(
-    Math.cos(t * 1.0 + Math.PI) * 0.88,
-    Math.cos(t * 0.8) * 0.2,
-    Math.sin(t * 1.0 + Math.PI) * 0.88
-  );
-
-  // Particles slow drift
-  particleSystem.rotation.y += 0.0008;
+  orb1.position.set(Math.cos(t * 0.7)*1.05, Math.sin(t*1.1)*0.22, Math.sin(t*0.7)*1.05);
+  orb2.position.set(Math.cos(t*1.0+Math.PI)*0.82, Math.cos(t*0.8)*0.18, Math.sin(t*1.0+Math.PI)*0.82);
 
   // FPS
   fpsCount++;
   const now = Date.now();
   if (now - fpsLast > 1000) {
-    document.getElementById('fps-val').textContent = fpsCount;
+    document.getElementById('fps').textContent = fpsCount;
     fpsCount = 0; fpsLast = now;
   }
 
   renderer.render(scene, cam3d);
 }
 
-// ═══════════════════════════════════════════
-//  UI CONTROLS
-// ═══════════════════════════════════════════
-function toggleInfo() {
-  document.getElementById('info-panel').classList.toggle('show');
-}
-
-function togglePause() {
+// ────────────────────────────────────────
+//  UI
+// ────────────────────────────────────────
+function togglePause(btn) {
   paused = !paused;
-  event.target.textContent = paused ? '▶' : '⏸';
+  btn.textContent = paused ? '▶ Play' : '⏸ Pausa';
 }
 
 function recenter() {
-  // Reset the alpha offset to current heading = "forward"
-  alphaOffset = alpha;
-  showHint('✓ Recentrado — esto es el frente');
+  alphaOffset = rawA;
+  hint('✓ Recentrado');
 }
 
 function setColor(hex, el) {
   if (mainMesh) mainMesh.material.color.set(hex);
-  document.querySelectorAll('.cdot').forEach(d => d.classList.remove('active'));
+  document.querySelectorAll('.cd').forEach(d=>d.classList.remove('active'));
   el.classList.add('active');
 }
 
-function showHint(msg) {
-  const old = document.getElementById('hint');
-  if (old) old.remove();
-  const div = document.createElement('div');
-  div.id = 'hint'; div.textContent = msg;
-  document.getElementById('hud').appendChild(div);
-  setTimeout(() => div.remove(), 4500);
+function hint(msg) {
+  document.querySelectorAll('.hint').forEach(h=>h.remove());
+  const d = document.createElement('div');
+  d.className='hint'; d.textContent=msg;
+  document.getElementById('hud').appendChild(d);
+  setTimeout(()=>d.remove(), 4000);
 }
 </script>
 </body>
